@@ -1,3 +1,4 @@
+import 'package:shopping_list_app/data/categories.dart';
 import 'package:shopping_list_app/models/category.dart';
 
 class GroceryItem {
@@ -18,4 +19,11 @@ class GroceryItem {
         'quantity': quantity,
         'category': category.title,
       };
+
+  GroceryItem.fromJson(Map<String, dynamic> json, this.id)
+      : name = json['name'] as String,
+        quantity = json['quantity'] as int,
+        category = categories.entries
+            .firstWhere((category) => category.value.title == json['category'])
+            .value;
 }
