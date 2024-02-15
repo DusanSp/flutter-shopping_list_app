@@ -14,51 +14,35 @@ class GroceryList extends StatefulWidget {
 }
 
 class _GroceryListState extends State<GroceryList> {
-  List<GroceryItem> _groceryItems = [];
-  var _isLoading = true;
-  String? _error;
+  final List<GroceryItem> _groceryItems = [];
+  late Future<List<GroceryItem>> _loadedItems;
 
   @override
   void initState() {
     super.initState();
-    _loadItems();
+    _loadedItems = _loadItems();
   }
 
-  void _loadItems() async {
-    try {
-      final response = await http.get(url);
+  Future<List<GroceryItem>> _loadItems() async {
+    final response = await http.get(url);
+    final Map<String, dynamic> listData = json.decode(response.body);
+    final List<GroceryItem> loadedItems = [];
 
-      if (response.statusCode >= 400) {
-        setState(() {
-          _error = 'Failed to fetch data. Please try again later.';
-        });
-        return;
-      }
-
-      if (response.body == 'null') {
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final Map<String, dynamic> listData = json.decode(response.body);
-      final List<GroceryItem> loadedItems = [];
-      for (final item in listData.entries) {
-        loadedItems.add(
-          GroceryItem.fromJson(item.value as Map<String, dynamic>, item.key),
-        );
-      }
-
-      setState(() {
-        _groceryItems = loadedItems;
-        _isLoading = false;
-      });
-    } catch (error) {
-      setState(() {
-        _error = 'Something went wrong. Please try again later.';
-      });
+    if (response.statusCode >= 400) {
+      throw Exception('Failed to fetch data. Please try again later.');
     }
+
+    if (response.body == 'null') {
+      return [];
+    }
+
+    for (final item in listData.entries) {
+      loadedItems.add(
+        GroceryItem.fromJson(item.value as Map<String, dynamic>, item.key),
+      );
+    }
+
+    return loadedItems;
   }
 
   void _addItem() async {
@@ -97,40 +81,41 @@ class _GroceryListState extends State<GroceryList> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    Widget mainContent = const Center(child: Text('No groceries added.'));
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Grocery List'),
+          actions: [
+            IconButton(
+                onPressed: _addItem,
+                icon: const Icon(
+                  Icons.add,
+                ))
+          ],
+        ),
+        body: FutureBuilder(
+          future: _loadedItems,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-    if (_isLoading) {
-      mainContent = const Center(child: CircularProgressIndicator());
-    }
+            if (snapshot.hasError) {
+              return Center(child: Text(snapshot.error.toString()));
+            }
 
-    if (_groceryItems.isNotEmpty) {
-      mainContent = ListView.builder(
-        itemCount: _groceryItems.length,
-        itemBuilder: (context, index) => Dismissible(
-          key: ValueKey(_groceryItems[index].id),
-          child: GroceryListItem(groceryItem: _groceryItems[index]),
-          onDismissed: (direction) => _removeItem(_groceryItems[index]),
+            if (snapshot.data!.isEmpty) {
+              return const Center(child: Text('No groceries added.'));
+            }
+
+            return ListView.builder(
+              itemCount: snapshot.data!.length,
+              itemBuilder: (context, index) => Dismissible(
+                key: ValueKey(snapshot.data![index].id),
+                child: GroceryListItem(groceryItem: snapshot.data![index]),
+                onDismissed: (direction) => _removeItem(snapshot.data![index]),
+              ),
+            );
+          },
         ),
       );
-    }
-
-    if (_error != null) {
-      mainContent = Center(child: Text(_error!));
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Grocery List'),
-        actions: [
-          IconButton(
-              onPressed: _addItem,
-              icon: const Icon(
-                Icons.add,
-              ))
-        ],
-      ),
-      body: mainContent,
-    );
-  }
 }
